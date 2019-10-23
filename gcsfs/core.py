@@ -688,12 +688,25 @@ class GCSFileSystem(fsspec.AbstractFileSystem):
     def info(self, path, **kwargs):
         """File information about this path."""
         path = self._strip_protocol(path)
-        out = self.ls(path, detail=True, **kwargs)
+        # Check directory cache for parent dir
+        parent_path = self._parent(path)
+        cache = self._maybe_get_cached_listing(norm_path(parent_path))
+        if cache:
+            for o in cache['items']:
+                if o['name'].rstrip("/") == path:
+                    return o
+        # Check exact file path
+        out = [o for o in self.ls(path, detail=True, **kwargs)
+               if o['name'].rstrip("/") == path]
+        if out:
+            return out[0]
+        # Check parent path
+        out = [o for o in self.ls(parent_path, detail=True, **kwargs)
+               if o['name'].rstrip("/") == path]
         if out:
             return out[0]
         else:
             raise FileNotFoundError(path)
-
 
     @_tracemethod
     def ls(self, path, detail=False):
