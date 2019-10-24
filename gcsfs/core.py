@@ -687,14 +687,27 @@ class GCSFileSystem(fsspec.AbstractFileSystem):
 
     def info(self, path, **kwargs):
         """File information about this path."""
+
         path = self._strip_protocol(path)
         # Check directory cache for parent dir
-        parent_path = self._parent(path)
-        cache = self._maybe_get_cached_listing(norm_path(parent_path))
-        if cache:
-            for o in cache['items']:
+        parent_path = norm_path(self._parent(path)).rstrip("/")
+        parent_cache = self._maybe_get_cached_listing(parent_path + "/")
+        if parent_cache:
+            for o in parent_cache['items']:
                 if o['name'].rstrip("/") == path:
                     return o
+        # Check if path is a directory that has been listed before
+        cache = self._maybe_get_cached_listing(path + "/")
+        if cache and cache['items']:
+            bucket, prefix = split_path(path)
+            return {
+                'bucket': bucket,
+                'name': bucket + "/" + prefix,
+                'kind': 'storage#object',
+                'size': 0,
+                'storageClass': 'DIRECTORY',
+                'type': 'directory'
+            }
         # Check exact file path
         out = [o for o in self.ls(path, detail=True, **kwargs)
                if o['name'].rstrip("/") == path]
